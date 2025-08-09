@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TYSMP Application (Test)</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; margin: 2rem; }
+      .card { max-width: 680px; margin: 0 auto; padding: 1.5rem; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+      label { display: block; margin-top: 1rem; font-weight: 600; }
+      input, textarea { width: 100%; padding: .6rem .7rem; border: 1px solid #ccc; border-radius: 8px; }
+      button { margin-top: 1rem; padding: .7rem 1.1rem; border: 0; background: #0f62fe; color: white; border-radius: 8px; cursor: pointer; }
+      .muted { color: #666; font-size: 0.9rem; }
+      .ok { color: #1e7d1e; }
+      .err { color: #b00020; }
+      .row { display: flex; gap: 1rem; }
+      .row > div { flex: 1; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Apply to TYSMP (Test)</h2>
+      <p class="muted">Paste this page URL with <code>?token=UUID</code> from the Discord bot DM.</p>
+
+      <div id="status" class="muted"></div>
+      <div id="userInfo" class="hidden"></div>
+
+      <form id="form" class="hidden">
+        <div class="row">
+          <div>
+            <label>Age</label>
+            <input type="number" id="age" min="0" max="120" />
+          </div>
+          <div>
+            <label>Minecraft Username</label>
+            <input type="text" id="mc" />
+          </div>
+        </div>
+        <label>Favourite thing about Minecraft</label>
+        <textarea id="fav" rows="3"></textarea>
+        <label>Your understanding of this server</label>
+        <textarea id="under" rows="4"></textarea>
+        <button type="submit">Submit Application</button>
+      </form>
+    </div>
+
+    <script>
+      const apiBase = (localStorage.getItem('api') || window.location.origin).replace(/\/$/, '');
+      const qs = new URLSearchParams(window.location.search);
+      const initialToken = qs.get('token');
+      const status = document.getElementById('status');
+      const userInfo = document.getElementById('userInfo');
+      const form = document.getElementById('form');
+
+      function setStatus(msg, cls='') { status.textContent = msg; status.className = cls; }
+
+      async function exchange() {
+        setStatus('Exchanging token…');
+        const res = await fetch(apiBase + '/exchange-token', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: initialToken })
+        });
+        if (!res.ok) { setStatus('Token invalid or expired', 'err'); return null; }
+        const data = await res.json();
+        setStatus('Welcome ' + data.username + ' (Discord ID ' + data.discord_id + ')', 'ok');
+        userInfo.classList.remove('hidden');
+        userInfo.textContent = 'You are: ' + data.username + ' (' + data.discord_id + ')';
+        return data.next_token;
+      }
+
+      async function submit(nextToken) {
+        const payload = {
+          token: nextToken,
+          age: parseInt(document.getElementById('age').value, 10),
+          minecraft_username: document.getElementById('mc').value.trim(),
+          favourite_about_minecraft: document.getElementById('fav').value.trim(),
+          server_understanding: document.getElementById('under').value.trim(),
+        };
+        const res = await fetch(apiBase + '/submit-application', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) { setStatus('Submit failed', 'err'); return; }
+        const data = await res.json();
+        setStatus('Application submitted! id: ' + data.application_id, 'ok');
+      }
+
+      (async () => {
+        if (!initialToken) { setStatus('Missing ?token in URL', 'err'); return; }
+        const nextToken = await exchange();
+        if (!nextToken) return;
+        form.classList.remove('hidden');
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await submit(nextToken);
+        });
+      })();
+    </script>
+  </body>
+  </html>
+
+
